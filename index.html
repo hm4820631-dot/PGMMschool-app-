@@ -4,6 +4,7 @@
 <title>School Admin</title><link rel="stylesheet" href="style.css">
 </head><body><main>
 <h1>School Admin <a href="portal.html">Student portal</a></h1>
+<p id="status" class="card">Loading…</p>
 
 <section id="login" class="card" hidden>
   <form id="loginForm">
@@ -22,4 +23,16 @@
   <div class="card"><form id="form"></form></div>
   <div class="card wrap"><table id="table"></table></div>
 </section>
-</main><script type="module" src="admin.js"></script></body></html>
+</main>
+<script>
+var st = document.getElementById('status');
+function showErr(m){ st.hidden = false; st.style.color = '#c92a2a'; st.textContent = 'Error: ' + m; }
+window.addEventListener('error', function(e){ showErr(e.message || 'a script failed to load'); });
+window.addEventListener('unhandledrejection', function(e){ showErr((e.reason && e.reason.message) || e.reason); });
+var t = setInterval(function(){
+  if (!document.getElementById('login').hidden || !document.getElementById('app').hidden) { st.hidden = true; clearInterval(t); }
+}, 300);
+setTimeout(function(){ if (!st.hidden && st.textContent === 'Loading…') st.textContent = 'Taking too long. A library may be blocked on your network.'; }, 10000);
+</script>
+<script type="module" src="admin.js" onerror="showErr('admin.js or a library could not load')"></script>
+</body></html>
