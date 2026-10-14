@@ -1,38 +1,256 @@
-<!DOCTYPE html>
-<html lang="en"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>School Admin</title><link rel="stylesheet" href="style.css">
-</head><body><main>
-<h1>School Admin <a href="portal.html">Student portal</a></h1>
-<p id="status" class="card">Loading…</p>
-
-<section id="login" class="card" hidden>
-  <form id="loginForm">
-    <input name="email" type="email" placeholder="Staff email" required>
-    <input name="password" type="password" placeholder="Password" required>
-    <button class="add">Sign in</button>
-  </form>
-</section>
-
-<section id="app" hidden>
-  <nav>
-    <button data-t="students">Students</button><button data-t="teachers">Teachers</button>
-    <button data-t="fees">Fees</button><button data-t="exams">Exams</button>
-  </nav>
-  <div class="bar"><input id="search" placeholder="Search this list"><button id="logout" class="add">Sign out</button></div>
-  <div class="card"><form id="form"></form></div>
-  <div class="card wrap"><table id="table"></table></div>
-</section>
-</main>
+<!doctype html>
+<html lang="bn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PGMM School</title>
+<link rel="icon" href="logo.jpg">
+<style>
+:root{--bg:#f2f9ff;--card:#fff;--line:#cde3f5;--tx:#12263a;--mute:#5b7289;--y:#1a78c8}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.5 system-ui,sans-serif;padding:20px 16px 60px;max-width:900px;margin-inline:auto}
+h1{font:700 30px Georgia,serif;margin:0}
+header{display:flex;justify-content:space-between;align-items:end;border-bottom:4px solid var(--y);padding-bottom:8px;margin-bottom:16px}
+nav{display:flex;gap:8px;overflow-x:auto;margin-bottom:14px}
+nav button,.btn{font:600 15px inherit;border:1px solid var(--line);background:var(--card);color:var(--tx);border-radius:10px;padding:12px 16px;cursor:pointer;white-space:nowrap}
+nav button.on{background:var(--y);border-color:var(--y);color:#fff}
+.btn.y{background:var(--y);border-color:var(--y);color:#fff}
+input,select{width:100%;font:inherit;background:#fff;color:var(--tx);border:1px solid var(--line);border-radius:10px;padding:12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:14px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid .full{grid-column:1/-1}
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;min-width:480px}
+th,td{text-align:left;padding:10px 8px;border-bottom:1px solid var(--line)}
+a{color:var(--y)}
+.bad{color:#d63a3a}.good{color:#1a8f4e}
+.brand{display:flex;align-items:center;gap:10px}.brand img{border-radius:50%}
+.banner{width:100%;height:auto;border-radius:10px;margin-bottom:12px;display:block}.mute{color:var(--mute)}
+#login{max-width:420px;margin:12vh auto}
+#login input{margin-bottom:10px}
+:focus-visible{outline:2px solid var(--y);outline-offset:2px}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script>
-var st = document.getElementById('status');
-function showErr(m){ st.hidden = false; st.style.color = '#c92a2a'; st.textContent = 'Error: ' + m; }
-window.addEventListener('error', function(e){ showErr(e.message || 'a script failed to load'); });
-window.addEventListener('unhandledrejection', function(e){ showErr((e.reason && e.reason.message) || e.reason); });
-var t = setInterval(function(){
-  if (!document.getElementById('login').hidden || !document.getElementById('app').hidden) { st.hidden = true; clearInterval(t); }
-}, 300);
-setTimeout(function(){ if (!st.hidden && st.textContent === 'Loading…') st.textContent = 'Taking too long. A library may be blocked on your network.'; }, 10000);
+// ====== এখানে আপনার Supabase তথ্য বসান (Project Settings > API) ======
+const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+const SUPABASE_KEY = 'YOUR_SUPABASE_ANON_KEY';
+const SCHOOL = 'Pransagar Girls’ Model Mission (H.S)';
+// =====================================================================
+
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let me, tab, cache = {students: [], teachers: []}, urls = {};
+
+// প্রতিটি ট্যাবের ফিল্ড: [কলাম, লেবেল, ধরন]
+const TABS = {
+  students:   {label:'Students',   f:[['photo_path','Photo','photo'],['roll_no','Roll no'],['name','Name'],['grade','Grade'],['dob','Date of birth','date'],['guardian_phone','Guardian phone'],['location','Location']]},
+  teachers:   {label:'Teachers',   f:[['photo_path','Photo','photo'],['name','Name'],['phone','Phone'],['subject','Subject'],['grade_group','Grade group'],['device_user_id','Device ID']]},
+  fees:       {label:'Fees',       f:[['student_id','Student','student'],['month','Month','month'],['amount','Amount','number'],['paid','Paid','bool']]},
+  results:    {label:'Result',     f:[['student_id','Student','student'],['exam_name','Exam'],['subject','Subject'],['marks','Marks','number'],['total','Total','number']]},
+  salaries:   {label:'Salary',     f:[['teacher_id','Teacher','teacher'],['month','Month','month'],['amount','Amount','number'],['paid','Paid','bool']]},
+  attendance: {label:'Attendance', f:[['teacher_id','Teacher','teacher'],['att_date','Date','date'],['in_time','In','time'],['out_time','Out','time']]}
+};
+const ROLE_TABS = {
+  admin:   ['students','teachers','fees','results','salaries','attendance'],
+  teacher: ['students','results','salaries','attendance'],
+  student: ['results','fees','students']
+};
+const CAN_ADD = {admin: Object.keys(TABS), teacher: ['results'], student: []};
+
+async function boot() {
+  const {data: {session}} = await sb.auth.getSession();
+  if (!session) return loginView();
+  const {data: p} = await sb.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
+  if (!p) return loginView('এই ইউজারের role সেট করা নেই। অ্যাডমিনের সাথে যোগাযোগ করুন।');
+  me = p;
+  await loadCache();
+  shell();
+  openTab(ROLE_TABS[me.role][0]);
+}
+
+async function loadCache() {
+  const [s, t] = await Promise.all([sb.from('students').select('*').order('roll_no'), sb.from('teachers').select('*').order('name')]);
+  cache.students = s.data || [];
+  cache.teachers = t.data || [];
+}
+
+function loginView(msg) {
+  $('#app').innerHTML = `<form id="login" class="card">
+    <img class="banner" src="school.jpg" alt="${SCHOOL}"><div class="brand" style="margin-bottom:6px"><img src="logo.jpg" alt="PGMM logo" width="48" height="48"><b>${SCHOOL}</b></div><p class="mute">ইমেইল ও পাসওয়ার্ড দিয়ে ঢুকুন</p>
+    <input id="em" type="email" placeholder="Email" required>
+    <input id="pw" type="password" placeholder="Password" required>
+    <button class="btn y" style="width:100%">Sign in</button>
+    <p class="bad" id="err">${esc(msg || '')}</p></form>`;
+  $('#login').onsubmit = async e => {
+    e.preventDefault();
+    const {error} = await sb.auth.signInWithPassword({email: $('#em').value, password: $('#pw').value});
+    if (error) $('#err').textContent = 'ইমেইল বা পাসওয়ার্ড ভুল'; else boot();
+  };
+}
+
+function shell() {
+  const title = {admin: 'School Admin', teacher: 'Teacher Portal', student: 'Student Portal'}[me.role];
+  $('#app').innerHTML = `<header><div class="brand"><img src="logo.jpg" alt="PGMM logo" width="48" height="48"><h1>${title}</h1></div><button class="btn" id="out">Sign out</button></header>
+    <nav>${ROLE_TABS[me.role].map(t => `<button data-t="${t}">${TABS[t].label}</button>`).join('')}</nav>
+    <div id="main"></div>`;
+  $('#out').onclick = async () => { await sb.auth.signOut(); loginView(); };
+  document.querySelectorAll('nav button').forEach(b => b.onclick = () => openTab(b.dataset.t));
+}
+
+function openTab(t) {
+  tab = t;
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.t === t));
+  render();
+}
+
+const nameOf = (list, id) => { const x = list.find(r => r.id === id); return x ? (x.roll_no ? x.roll_no + ' ' : '') + x.name : ''; };
+
+function shrink(file) {
+  return new Promise(res => {
+    const i = new Image();
+    i.onload = () => {
+      const sc = Math.min(1, 300 / Math.max(i.width, i.height)), c = document.createElement('canvas');
+      c.width = i.width * sc; c.height = i.height * sc;
+      c.getContext('2d').drawImage(i, 0, 0, c.width, c.height);
+      c.toBlob(res, 'image/jpeg', 0.85);
+    };
+    i.src = URL.createObjectURL(file);
+  });
+}
+
+function cell(row, [k, , type]) {
+  const v = row[k];
+  if (type === 'photo') {
+    const img = urls[v] ? `<img src="${urls[v]}" width="44" height="44" style="border-radius:50%;object-fit:cover" alt="">` : '<span class="mute">–</span>';
+    const up = me.role === 'admin' ? ` <label class="btn" style="padding:6px 10px">📷<input type="file" accept="image/*" data-up="${row.id}" hidden></label>` : '';
+    return img + up;
+  }
+  if (type === 'student') return esc(nameOf(cache.students, v));
+  if (type === 'teacher') return esc(nameOf(cache.teachers, v));
+  if (type === 'bool') return v ? '<span class="good">Paid</span>' : '<span class="bad">Due</span>';
+  return esc(v);
+}
+
+function field([k, label, type]) {
+  if (type === 'photo') return '';
+  if (type === 'student' || type === 'teacher') {
+    const list = type === 'student' ? cache.students : cache.teachers;
+    return `<select name="${k}" required><option value="">${label}</option>${list.map(r => `<option value="${r.id}">${esc((r.roll_no ? r.roll_no + ' ' : '') + r.name)}</option>`).join('')}</select>`;
+  }
+  if (type === 'bool') return `<select name="${k}"><option value="false">Due</option><option value="true">Paid</option></select>`;
+  const t = {date: 'date', number: 'number', month: 'month', time: 'time'}[type] || 'text';
+  return `<input name="${k}" type="${t}" placeholder="${label}" title="${label}" step="any">`;
+}
+
+async function render() {
+  const cfg = TABS[tab], main = $('#main');
+  main.innerHTML = '<p class="mute">লোড হচ্ছে…</p>';
+  const {data, error} = await sb.from(tab).select('*').order('created_at', {ascending: false});
+  if (error) { main.innerHTML = `<p class="bad">${esc(error.message)}</p>`; return; }
+  const rows = data || [];
+  urls = {};
+  if (tab === 'students' || tab === 'teachers') {
+    const ps = rows.map(r => r.photo_path).filter(Boolean);
+    if (ps.length) {
+      const {data: sg} = await sb.storage.from('avatars').createSignedUrls(ps, 3600);
+      (sg || []).forEach(x => { if (x.signedUrl) urls[x.path] = x.signedUrl; });
+    }
+  }
+  let html = '';
+
+  if (me.role === 'student' && tab === 'fees') {
+    const due = rows.filter(r => !r.paid).reduce((a, r) => a + Number(r.amount || 0), 0);
+    html += `<div class="card"><b>মোট বকেয়া ফি:</b> <span class="${due ? 'bad' : 'good'}">৳${due}</span></div>`;
+  }
+  if (me.role === 'student' && tab === 'results') html += progress(rows);
+  if (me.role === 'admin' && tab === 'fees') html += reminders(rows);
+
+  html += `<input id="q" placeholder="Search this list" style="margin-bottom:14px">`;
+  if (CAN_ADD[me.role].includes(tab)) {
+    html += `<form id="add" class="card grid">${cfg.f.map(x => field(x)).join('')}<button class="btn y full">Add</button></form>`;
+  }
+  html += `<div class="card scroll"><table><thead><tr>${cfg.f.map(f => `<th>${f[1]}</th>`).join('')}${me.role === 'admin' ? '<th></th>' : ''}</tr></thead><tbody id="rows"></tbody></table></div>`;
+  main.innerHTML = html;
+
+  const draw = () => {
+    const q = $('#q').value.toLowerCase();
+    $('#rows').innerHTML = rows.filter(r => cfg.f.filter(f => f[2] !== 'photo').map(f => cell(r, f)).join(' ').toLowerCase().includes(q)).map(r =>
+      `<tr>${cfg.f.map(f => `<td>${cell(r, f)}</td>`).join('')}${me.role === 'admin' ? `<td><button class="btn" data-del="${r.id}">✕</button></td>` : ''}</tr>`).join('')
+      || `<tr><td class="mute" colspan="9">কিছু পাওয়া যায়নি</td></tr>`;
+    document.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => {
+      if (!confirm('মুছে ফেলবেন?')) return;
+      await sb.from(tab).delete().eq('id', b.dataset.del);
+      if (tab === 'students' || tab === 'teachers') await loadCache();
+      render();
+    });
+  };
+  draw();
+  $('#q').oninput = draw;
+  $('#rows').addEventListener('change', async e => {
+    const inp = e.target;
+    if (!inp.dataset.up || !inp.files[0]) return;
+    const blob = await shrink(inp.files[0]), path = `${tab}/${inp.dataset.up}.jpg`;
+    const up = await sb.storage.from('avatars').upload(path, blob, {upsert: true, contentType: 'image/jpeg'});
+    if (up.error) return alert(up.error.message);
+    const u = await sb.from(tab).update({photo_path: path}).eq('id', inp.dataset.up);
+    if (u.error) return alert(u.error.message);
+    render();
+  });
+
+  const form = $('#add');
+  if (form) form.onsubmit = async e => {
+    e.preventDefault();
+    const rec = {};
+    cfg.f.forEach(([k, , type]) => {
+      if (type === 'photo') return;
+      let v = form.elements[k].value;
+      if (type === 'bool') v = v === 'true';
+      else if (v === '') v = null;
+      else if (type === 'number') v = Number(v);
+      rec[k] = v;
+    });
+    const {error} = await sb.from(tab).insert(rec);
+    if (error) return alert(error.message);
+    if (tab === 'students' || tab === 'teachers') await loadCache();
+    render();
+  };
+}
+
+// স্টুডেন্ট/অভিভাবকের জন্য উন্নতি-অবনতির গ্রাফ
+function progress(rows) {
+  const pts = rows.filter(r => r.total > 0).reverse().map(r => Math.round(r.marks / r.total * 100));
+  if (pts.length < 2) return `<div class="card mute">গ্রাফ দেখাতে অন্তত ২টি রেজাল্ট দরকার</div>`;
+  const W = 300, H = 110, step = W / (pts.length - 1);
+  const xy = pts.map((p, i) => `${(i * step).toFixed(1)},${(H - p * H / 100).toFixed(1)}`).join(' ');
+  const d = pts[pts.length - 1] - pts[pts.length - 2];
+  const msg = d > 0 ? `<span class="good">উন্নতি +${d}%</span>` : d < 0 ? `<span class="bad">অবনতি ${d}%</span>` : 'আগের মতোই';
+  return `<div class="card"><b>অগ্রগতি:</b> ${msg}
+    <svg viewBox="0 0 ${W} ${H}" style="width:100%;margin-top:8px"><polyline points="${xy}" fill="none" stroke="#1a78c8" stroke-width="3"/></svg></div>`;
+}
+
+// মাসের শেষে গার্ডিয়ানকে WhatsApp মেসেজ (বকেয়া থাকলে)
+function reminders(rows) {
+  const due = {};
+  rows.filter(r => !r.paid).forEach(r => due[r.student_id] = (due[r.student_id] || 0) + Number(r.amount || 0));
+  const month = new Date().toISOString().slice(0, 7);
+  const list = Object.entries(due).map(([id, amt]) => {
+    const s = cache.students.find(x => x.id === id);
+    if (!s || !s.guardian_phone) return '';
+    let ph = s.guardian_phone.replace(/\D/g, '');
+    if (ph.startsWith('0')) ph = '88' + ph; // বাংলাদেশ নম্বর
+    const text = `প্রিয় অভিভাবক, ${s.name} (${s.roll_no}) এর ${month} পর্যন্ত বকেয়া ফি ৳${amt}। অনুগ্রহ করে পরিশোধ করুন। - ${SCHOOL}`;
+    return `<tr><td>${esc(s.name)}</td><td class="bad">৳${amt}</td><td><a target="_blank" rel="noopener" href="https://wa.me/${ph}?text=${encodeURIComponent(text)}">Send</a></td></tr>`;
+  }).join('');
+  return `<div class="card scroll"><b>মাস শেষের মেসেজ (বকেয়া আছে এমন গার্ডিয়ান)</b>
+    <table><tbody>${list || '<tr><td class="mute">কারো বকেয়া নেই</td></tr>'}</tbody></table></div>`;
+}
+
+boot();
 </script>
-<script type="module" src="admin.js" onerror="showErr('admin.js or a library could not load')"></script>
-</body></html>
+</body>
+</html>
