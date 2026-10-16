@@ -28,7 +28,7 @@ th,td{padding:8px;border-bottom:1px solid #e3edf7}.wrap{overflow-x:auto}
 .bar{height:12px;background:#dcecfb;border-radius:8px;overflow:hidden}.bar i{display:block;height:100%;background:var(--green)}
 .modal{position:fixed;inset:0;background:#0007;display:flex;align-items:center;justify-content:center;padding:14px;z-index:9}
 .modal .box{width:100%;max-width:440px;max-height:90vh;overflow:auto}
-.tag{padding:2px 8px;border-radius:20px;font-size:12px;color:#fff}.hide{display:none}
+.tag{padding:2px 8px;border-radius:20px;font-size:12px;color:#fff}.hide{display:none}.av{border-radius:50%;object-fit:cover;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-weight:700;background:var(--sky);border:2px solid var(--gold);vertical-align:middle}
 h2{color:var(--navy);margin:4px 0 10px}.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.row>*{flex:1}
 </style></head><body>
 <div id="app"></div>
@@ -59,12 +59,18 @@ async function boot(){
 const shell=(nav,body)=>A.innerHTML=`<div class="top"><div><img src="IMG_2591.jpeg" width="30" style="vertical-align:middle;border-radius:50%"> <b>PGMM</b> · ${esc(me.name)} (${me.role})</div><button class="r sm" onclick="logout()">Logout</button></div>${nav}<div id="main" style="padding:4px 10px">${body}</div>`;
 const money=n=>'₹'+Number(n||0).toLocaleString('en-IN');
 const pct=(m,f)=>f?Math.round(m*100/f):0;
+const av=(u,n,sz=40)=>u?`<img class="av" src="${esc(u)}" style="width:${sz}px;height:${sz}px">`:`<span class="av" style="width:${sz}px;height:${sz}px;font-size:${Math.round(sz/2.2)}px">${esc((n||'?')[0].toUpperCase())}</span>`;
+const teachersBox=d=>`<div class="box"><h2>Our teachers</h2><div class="grid">${(d||[]).map(t=>`<div style="text-align:center">${av(t.photo_url,t.name,72)}<br><b>${esc(t.name)}</b><br><small>${esc(t.subject)}</small></div>`).join('')||'No teachers yet.'}</div></div>`;
+function shrink(file,size=256){return new Promise((ok,no)=>{const im=new Image();im.onload=()=>{const c=document.createElement('canvas');c.width=c.height=size;const x=c.getContext('2d'),m=Math.min(im.width,im.height);x.drawImage(im,(im.width-m)/2,(im.height-m)/2,m,m,0,0,size,size);c.toBlob(b=>b?ok(b):no(new Error('Image error')),'image/jpeg',.85)};im.onerror=()=>no(new Error('Cannot read this image'));im.src=URL.createObjectURL(file)})}
+async function upPhoto(file,id){const b=await shrink(file);const p=`teachers/${id}_${Date.now()}.jpg`;const {error}=await db.storage.from('photos').upload(p,b,{contentType:'image/jpeg'});if(error)throw error;return db.storage.from('photos').getPublicUrl(p).data.publicUrl}
+async function myPhoto(f,id){if(!f)return;try{const u=await upPhoto(f,id);const {error}=await db.rpc('set_my_photo',{url:u});if(error)throw error;teacherView()}catch(e){alert(e.message)}}
 
 // ---------------- STUDENT ----------------
 async function studentView(){
   const {data:s}=await db.from('students').select('*').eq('user_id',me.id).single();
   const {data:f}=await db.from('fees').select('*').eq('student',s.id).order('month',{ascending:false});
   const {data:r}=await db.from('results').select('*').eq('student',s.id).order('created_at');
+  const {data:td}=await db.from('teacher_directory').select('*').order('name');
   const due=(f||[]).reduce((a,x)=>a+x.amount-x.paid,0);
   const ex={};(r||[]).forEach(x=>{(ex[x.exam]??={m:0,f:0}).m+=x.marks;ex[x.exam].f+=x.full_marks});
   shell('',`<div class="box"><h2>${esc(s.name)}</h2><div class="grid">
@@ -75,7 +81,7 @@ async function studentView(){
    <b>Guardian:</b> ${esc(s.guardian_name)} · ${esc(s.guardian_phone)}</p></div>
    <div class="box"><h2>Result progress</h2>${Object.entries(ex).map(([k,v])=>`<p>${esc(k)}: <b>${pct(v.m,v.f)}%</b><div class="bar"><i style="width:${pct(v.m,v.f)}%"></i></div></p>`).join('')||'No results yet.'}
    <div class="wrap"><table><tr><th>Exam<th>Subject<th>Marks</tr>${(r||[]).map(x=>`<tr><td>${esc(x.exam)}<td>${esc(x.subject)}<td>${x.marks}/${x.full_marks}`).join('')}</table></div></div>
-   <div class="box"><h2>Fees</h2><div class="wrap"><table><tr><th>Month<th>Amount<th>Paid<th>Due</tr>${(f||[]).map(x=>`<tr><td>${x.month}<td>${money(x.amount)}<td>${money(x.paid)}<td style="color:${x.amount>x.paid?'#c0392b':'#22a06b'}">${money(x.amount-x.paid)}`).join('')}</table></div></div>`)}
+   <div class="box"><h2>Fees</h2><div class="wrap"><table><tr><th>Month<th>Amount<th>Paid<th>Due</tr>${(f||[]).map(x=>`<tr><td>${x.month}<td>${money(x.amount)}<td>${money(x.paid)}<td style="color:${x.amount>x.paid?'#c0392b':'#22a06b'}">${money(x.amount-x.paid)}`).join('')}</table></div></div>`+teachersBox(td))}
 
 // ---------------- TEACHER ----------------
 async function teacherView(){
@@ -84,14 +90,15 @@ async function teacherView(){
   const {data:att}=await db.from('attendance').select('*').eq('teacher',t.id).order('day',{ascending:false}).limit(31);
   const {data:st}=await db.from('students').select('id,name,class,roll,student_id').order('class').order('roll');
   cache.st=st;
-  shell('',`<div class="box"><h2>${esc(t.name)}</h2><p>${esc(t.subject)} · ${esc(t.phone)} · Salary ${money(t.monthly_salary)}/month</p></div>
+  const {data:td}=await db.from('teacher_directory').select('*').order('name');
+  shell('',`<div class="box"><div style="display:flex;gap:14px;align-items:center">${av(t.photo_url,t.name,84)}<div><h2 style="margin:0">${esc(t.name)}</h2><p style="margin:4px 0">${esc(t.subject)} · ${esc(t.phone)} · Salary ${money(t.monthly_salary)}/month</p><input type="file" accept="image/*" id="ph" class="hide" onchange="myPhoto(this.files[0],'${t.id}')"><button class="s sm" onclick="$('#ph').click()">Change photo</button></div></div></div>
   <div class="box"><h2>Upload result</h2>
    <input id="q" placeholder="Search student by name / class / roll" oninput="fillPick()"><select id="pick"></select>
    <div class="row"><input id="ex" placeholder="Exam (e.g. Unit Test 1)"><input id="sub" placeholder="Subject" value="${esc(t.subject)}"></div>
    <div class="row"><input id="mk" type="number" placeholder="Marks"><input id="fm" type="number" value="100" placeholder="Full marks"></div>
    <button class="g" onclick="saveResult()">Save result</button></div>
   <div class="box"><h2>Salary</h2><div class="wrap"><table><tr><th>Month<th>Amount<th>Status</tr>${(sal||[]).map(x=>`<tr><td>${x.month}<td>${money(x.amount)}<td>${x.status}`).join('')}</table></div></div>
-  <div class="box"><h2>Attendance</h2><div class="wrap"><table><tr><th>Date<th>Status</tr>${(att||[]).map(x=>`<tr><td>${x.day}<td>${x.status}`).join('')}</table></div></div>`);fillPick()}
+  <div class="box"><h2>Attendance</h2><div class="wrap"><table><tr><th>Date<th>Status</tr>${(att||[]).map(x=>`<tr><td>${x.day}<td>${x.status}`).join('')}</table></div></div>`+teachersBox(td));fillPick()}
 function fillPick(){const q=($('#q').value||'').toLowerCase();
   $('#pick').innerHTML=cache.st.filter(s=>(s.name+s.class+s.roll+s.student_id).toLowerCase().includes(q)).slice(0,60).map(s=>`<option value="${s.id}">${esc(s.name)} · ${esc(s.class)} · Roll ${esc(s.roll)}</option>`).join('')}
 async function saveResult(){
@@ -102,7 +109,7 @@ async function saveResult(){
 // ---------------- ADMIN ----------------
 const TABS={
  students:{t:'Students',tbl:'students',cols:['student_id','name','class','roll','contact'],form:[['student_id','Student ID'],['name','Name'],['class','Class'],['roll','Roll'],['address','Address'],['guardian_name','Guardian name'],['guardian_phone','Guardian phone'],['contact','Contact number']],acct:1,role:'student'},
- teachers:{t:'Teachers',tbl:'teachers',cols:['teacher_id','name','subject','phone','monthly_salary'],form:[['teacher_id','Teacher ID'],['name','Name'],['subject','Subject'],['phone','Phone'],['monthly_salary','Monthly salary']],acct:1,role:'teacher'},
+ teachers:{t:'Teachers',tbl:'teachers',cols:['photo_url','teacher_id','name','subject','phone','monthly_salary'],photo:1,form:[['teacher_id','Teacher ID'],['name','Name'],['subject','Subject'],['phone','Phone'],['monthly_salary','Monthly salary']],acct:1,role:'teacher'},
  fees:{t:'Fees',custom:'fees'},results:{t:'Results',tbl:'results',cols:['student_name','exam','subject','marks','full_marks'],form:[['exam','Exam'],['subject','Subject'],['marks','Marks'],['full_marks','Full marks']],student:1},
  salaries:{t:'Salary',tbl:'salaries',cols:['teacher_name','month','amount','status'],form:[['month','Month (YYYY-MM)'],['amount','Amount'],['status','Status (Paid/Due)']],teacher:1},
  attendance:{t:'Attendance',tbl:'attendance',cols:['teacher_name','day','status'],form:[['day','Date (YYYY-MM-DD)'],['status','Present / Absent / Leave']],teacher:1},
@@ -119,8 +126,8 @@ async function loadTab(){
 function drawTable(){const T=TABS[tab],q=($('#sq')?.value||'').toLowerCase();let rows=cache.rows.filter(r=>JSON.stringify(Object.values(r)).toLowerCase().includes(q));
   const k=sortKey[tab];if(k)rows.sort((a,b)=>String(a[k.c]).localeCompare(String(b[k.c]),undefined,{numeric:true})*k.d);
   $('#pane').innerHTML=`<h2>${T.t} (${rows.length})</h2><div class="row"><input id="sq" placeholder="Search…" value="${esc(q)}" oninput="drawTable();this.focus()"><button class="g" style="flex:0" onclick="edit()">+ Add</button></div>
-  <div class="wrap"><table><tr>${T.cols.map(c=>`<th onclick="srt('${c}')">${c.replace('_',' ')}</th>`).join('')}<th></tr>
-  ${rows.map(r=>`<tr>${T.cols.map(c=>`<td>${esc(r[c])}`).join('')}<td style="white-space:nowrap"><button class="s sm" onclick="edit('${r.id}')">Edit</button> <button class="r sm" onclick="del('${r.id}')">Delete</button>`).join('')}</table></div>`;
+  <div class="wrap"><table><tr>${T.cols.map(c=>`<th onclick="srt('${c}')">${c==='photo_url'?'photo':c.replace('_',' ')}</th>`).join('')}<th></tr>
+  ${rows.map(r=>`<tr>${T.cols.map(c=>`<td>${c==='photo_url'?av(r[c],r.name,34):esc(r[c])}`).join('')}<td style="white-space:nowrap"><button class="s sm" onclick="edit('${r.id}')">Edit</button> <button class="r sm" onclick="del('${r.id}')">Delete</button>`).join('')}</table></div>`;
   const e=$('#sq');if(q){e.focus();e.setSelectionRange(q.length,q.length)}}
 function srt(c){const k=sortKey[tab];sortKey[tab]={c,d:k&&k.c==c?-k.d:1};drawTable()}
 function modal(html){const m=document.createElement('div');m.className='modal';m.innerHTML=`<div class="box">${html}</div>`;m.onclick=e=>{if(e.target==m)m.remove()};document.body.appendChild(m);return m}
@@ -128,6 +135,7 @@ function edit(id){const T=TABS[tab],r=cache.rows.find(x=>x.id==id)||{};
   const pick=(key,list,label)=>`<label>${label}</label><select id="f_${key}">${Object.values(list).map(x=>`<option value="${x.id}" ${r[key]==x.id?'selected':''}>${esc(x.name)}${x.class?' · '+esc(x.class)+' · '+esc(x.roll):''}</option>`).join('')}</select>`;
   modal(`<h2>${id?'Edit':'Add'} ${T.t}</h2>${T.student?pick('student',cache.S,'Student'):''}${T.teacher?pick('teacher',cache.T,'Teacher'):''}
   ${T.form.map(([k,l])=>`<label>${l}</label><input id="f_${k}" value="${esc(r[k])}">`).join('')}
+  ${T.photo?`<label>Photo</label><input type="file" id="f_photo" accept="image/*">`:''}
   ${T.acct&&!id?`<label>Login password (min 6 chars)</label><input id="f_pw" value="${Math.random().toString(36).slice(2,8)}"><small>Login ID = ${T.form[0][1]}</small>`:''}
   <p></p><button class="g" onclick="save('${id||''}',this)">Save</button>`)}
 async function mkUser(loginId,pw,role,name){
@@ -137,6 +145,7 @@ async function mkUser(loginId,pw,role,name){
 async function save(id,btn){const T=TABS[tab];btn.disabled=true;try{
   const row={};T.form.forEach(([k])=>row[k]=$('#f_'+k).value.trim());
   if(T.student)row.student=$('#f_student').value;if(T.teacher)row.teacher=$('#f_teacher').value;
+  if(T.photo){const fl=$('#f_photo').files[0];if(fl)row.photo_url=await upPhoto(fl,id||'new')}
   if(T.acct&&!id){row.user_id=await mkUser(row[T.form[0][0]],$('#f_pw').value,T.role,row.name);alert('Account created.\nID: '+row[T.form[0][0]]+'\nPassword: '+$('#f_pw').value+'\n(Note it down and give it to them)')}
   const q=id?db.from(T.tbl).update(row).eq('id',id):db.from(T.tbl).insert(row);const {error}=await q;if(error)throw error;
   document.querySelector('.modal').remove();loadTab()}catch(e){alert(e.message);btn.disabled=false}}
