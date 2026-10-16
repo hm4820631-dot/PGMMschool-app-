@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>PGMM - Pransagar Girls' Model Mission (H.S)</title>
+<title>PGMM - Pransagar Girl's Model Mission (H.S)</title>
 <link rel="icon" href="logo.jpeg">
 <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
@@ -42,7 +42,7 @@ const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&g
 const ym=()=>new Date().toISOString().slice(0,7);
 let me=null, tab='students', cache={}, sortKey={};
 
-const hero=()=>`<div class="hero"><img src="logo.jpeg"><h1>Pransagar Girls' Model Mission (H.S)</h1><p>P.G.M.M · Estd 2024 · Education Builds a Brighter Future</p></div>`;
+const hero=()=>`<div class="hero"><img src="logo.jpeg"><h1>Pransagar Girl's Model Mission (H.S)</h1><p>P.G.M.M · Estd 2024 · Education Builds a Brighter Future</p></div>`;
 
 function loginView(msg=''){A.innerHTML=hero()+`<div class="box login"><h2>Login</h2>
 <input id="lid" placeholder="Your ID" autocapitalize="none"><input id="pw" type="password" placeholder="Password">
@@ -149,7 +149,7 @@ async function feesPane(){const m=window._fm||ym();window._fm=m;
   const {data:sp}=await db.from('students').select('id,guardian_name,guardian_phone');const g=Object.fromEntries(sp.map(x=>[x.id,x]));
   $('#pane').innerHTML=`<h2>Fees</h2><div class="row"><input type="month" value="${m}" onchange="window._fm=this.value;feesPane()"><input id="amt" type="number" placeholder="Monthly fee for everyone" style="flex:2"><button class="s" onclick="genFees()">Create month</button></div>
   <div class="wrap"><table><tr><th>Student<th>Amount<th>Paid<th>Due<th></tr>${cache.fees.map(f=>{const s=cache.S[f.student]||{},d=f.amount-f.paid,p=g[f.student]||{};
-   const txt=encodeURIComponent(`Dear ${p.guardian_name||'Guardian'}, ${s.name}'s school fee for ${m}: ${money(f.amount)}, paid ${money(f.paid)}, due ${money(d)}. - Pransagar Girls' Model Mission (H.S)`);
+   const txt=encodeURIComponent(`Dear ${p.guardian_name||'Guardian'}, ${s.name}'s school fee for ${m}: ${money(f.amount)}, paid ${money(f.paid)}, due ${money(d)}. - Pransagar Girl's Model Mission (H.S)`);
    return `<tr><td>${esc(s.name)} <small>${esc(s.class)}</small><td>${money(f.amount)}<td><input type="number" value="${f.paid}" style="width:90px;padding:4px" onchange="setPaid('${f.id}',this.value)"><td style="color:${d>0?'#c0392b':'#22a06b'}">${money(d)}<td style="white-space:nowrap">${d>0?`<a href="sms:${esc(p.guardian_phone)}?&body=${txt}"><button class="o sm">SMS</button></a> <a target="_blank" href="https://wa.me/91${String(p.guardian_phone||'').replace(/\D/g,'').slice(-10)}?text=${txt}"><button class="g sm">WhatsApp</button></a>`:'✓ Paid'}`}).join('')}</table></div>
   <p><small>Tap SMS/WhatsApp to open a ready message to the guardian at month end.</small></p>`}
 async function genFees(){const m=window._fm,a=+$('#amt').value;if(!a)return alert('Enter amount');
