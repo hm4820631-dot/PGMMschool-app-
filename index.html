@@ -147,15 +147,29 @@ async function feesPane(){const m=window._fm||ym();window._fm=m;
   const {data}=await db.from('fees').select('*').eq('month',m);cache.fees=data||[];
   const st=Object.values(cache.S).sort((a,b)=>(a.class+a.roll).localeCompare(b.class+b.roll,undefined,{numeric:true}));
   const {data:sp}=await db.from('students').select('id,guardian_name,guardian_phone');const g=Object.fromEntries(sp.map(x=>[x.id,x]));
-  $('#pane').innerHTML=`<h2>Fees</h2><div class="row"><input type="month" value="${m}" onchange="window._fm=this.value;feesPane()"><input id="amt" type="number" placeholder="Monthly fee for everyone" style="flex:2"><button class="s" onclick="genFees()">Create month</button></div>
-  <div class="wrap"><table><tr><th>Student<th>Amount<th>Paid<th>Due<th></tr>${cache.fees.map(f=>{const s=cache.S[f.student]||{},d=f.amount-f.paid,p=g[f.student]||{};
+  $('#pane').innerHTML=`<h2>Fees</h2><div class="row"><input type="month" value="${m}" onchange="window._fm=this.value;feesPane()"><input id="amt" type="number" placeholder="Monthly fee for everyone" style="flex:2"><button class="s" onclick="genFees()">Create month</button><button class="r" onclick="delMonth()">Delete month</button></div>
+  ${cache.cardsHtml=cache.fees.map(f=>{const s=cache.S[f.student]||{},d=f.amount-f.paid,p=g[f.student]||{};
    const txt=encodeURIComponent(`Dear ${p.guardian_name||'Guardian'}, ${s.name}'s school fee for ${m}: ${money(f.amount)}, paid ${money(f.paid)}, due ${money(d)}. - Pransagar Girl's Model Mission (H.S)`);
-   return `<tr><td>${esc(s.name)} <small>${esc(s.class)}</small><td>${money(f.amount)}<td><input type="number" value="${f.paid}" style="width:90px;padding:4px" onchange="setPaid('${f.id}',this.value)"><td style="color:${d>0?'#c0392b':'#22a06b'}">${money(d)}<td style="white-space:nowrap">${d>0?`<a href="sms:${esc(p.guardian_phone)}?&body=${txt}"><button class="o sm">SMS</button></a> <a target="_blank" href="https://wa.me/91${String(p.guardian_phone||'').replace(/\D/g,'').slice(-10)}?text=${txt}"><button class="g sm">WhatsApp</button></a>`:'✓ Paid'}`}).join('')}</table></div>
+   const st=d>0?'Due '+money(d):(d<0?'Extra '+money(-d):'✓ Paid');
+   return `<div style="border:1.5px solid #dcecfb;border-radius:12px;padding:10px;margin:8px 0">
+    <div style="display:flex;justify-content:space-between;gap:8px"><b>${esc(s.name)} <small>${esc(s.class)}</small></b><b style="color:${d>0?'#c0392b':'#22a06b'}">${st}</b></div>
+    <div class="row"><label><small>Amount</small><input type="number" value="${f.amount}" onchange="setFee('${f.id}','amount',this.value)"></label><label><small>Paid</small><input type="number" value="${f.paid}" onchange="setFee('${f.id}','paid',this.value)"></label></div>
+    <div class="row" style="margin-top:6px">${d>0?`<a href="sms:${esc(p.guardian_phone)}?&body=${txt}"><button class="o sm" style="width:100%">SMS</button></a><a target="_blank" href="https://wa.me/91${String(p.guardian_phone||'').replace(/\D/g,'').slice(-10)}?text=${txt}"><button class="g sm" style="width:100%">WhatsApp</button></a>`:''}<button class="r sm" onclick="delFee('${f.id}')">Delete</button></div></div>`}).join('')||'<p>No fees for this month yet. Enter an amount and tap Create month.</p>'}
+  ${cache.fees.length?`<button class="r sm" onclick="delMonth()">Delete whole month (${m})</button>`:''}
   <p><small>Tap SMS/WhatsApp to open a ready message to the guardian at month end.</small></p>`}
 async function genFees(){const m=window._fm,a=+$('#amt').value;if(!a)return alert('Enter amount');
   const have=new Set(cache.fees.map(f=>f.student));const rows=Object.keys(cache.S).filter(id=>!have.has(id)).map(id=>({student:id,month:m,amount:a,paid:0}));
   if(!rows.length)return alert('Already created');const {error}=await db.from('fees').insert(rows);if(error)alert(error.message);feesPane()}
 async function setPaid(id,v){const {error}=await db.from('fees').update({paid:+v}).eq('id',id);if(error)alert(error.message);feesPane()}
+async function setFee(id,col,v){const {error}=await db.from('fees').update({[col]:+v}).eq('id',id);if(error)alert(error.message);feesPane()}
+async function delFee(id){if(!confirm('Delete this fee entry?'))return;const {error}=await db.from('fees').delete().eq('id',id);if(error)alert(error.message);feesPane()}
+async function delMonth(){if(!confirm('Delete ALL fee entries of '+window._fm+'?'))return;const {error}=await db.from('fees').delete().eq('month',window._fm);if(error)alert(error.message);feesPane()}
+async function editFee(id,a){const v=prompt('New fee amount',a);if(v===null||v.trim()===''||isNaN(v))return;
+  const {error}=await db.from('fees').update({amount:+v}).eq('id',id);if(error)alert(error.message);feesPane()}
+async function delFee(id){if(!confirm('Delete this fee record?'))return;
+  const {error}=await db.from('fees').delete().eq('id',id);if(error)alert(error.message);feesPane()}
+async function delMonth(){const m=window._fm;if(!confirm('Delete ALL fee records of '+m+'?'))return;
+  const {error}=await db.from('fees').delete().eq('month',m);if(error)alert(error.message);feesPane()}
 // admins
 async function adminsPane(){const {data}=await db.from('profiles').select('*').eq('role','admin');
   $('#pane').innerHTML=`<h2>Admins</h2><div class="wrap"><table><tr><th>ID<th>Name</tr>${data.map(a=>`<tr><td>${esc(a.login_id)}<td>${esc(a.name)}`).join('')}</table></div>
