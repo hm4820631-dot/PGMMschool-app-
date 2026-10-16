@@ -59,6 +59,7 @@ async function boot(){
 const shell=(nav,body)=>A.innerHTML=`<div class="top"><div><img src="IMG_2591.jpeg" width="30" style="vertical-align:middle;border-radius:50%"> <b>PGMM</b> · ${esc(me.name)} (${me.role})</div><button class="r sm" onclick="logout()">Logout</button></div>${nav}<div id="main" style="padding:4px 10px">${body}</div>`;
 const money=n=>'₹'+Number(n||0).toLocaleString('en-IN');
 const pct=(m,f)=>f?Math.round(m*100/f):0;
+const pc=(m,f)=>f?Math.round(m*1000/f)/10:0;
 const av=(u,n,sz=40)=>u?`<img class="av" src="${esc(u)}" style="width:${sz}px;height:${sz}px">`:`<span class="av" style="width:${sz}px;height:${sz}px;font-size:${Math.round(sz/2.2)}px">${esc((n||'?')[0].toUpperCase())}</span>`;
 const teachersBox=d=>`<div class="box"><h2>Our teachers</h2><div class="grid">${(d||[]).map(t=>`<div style="text-align:center">${av(t.photo_url,t.name,72)}<br><b>${esc(t.name)}</b><br><small>${esc(t.subject)}</small></div>`).join('')||'No teachers yet.'}</div></div>`;
 function shrink(file,size=256){return new Promise((ok,no)=>{const im=new Image();im.onload=()=>{const c=document.createElement('canvas');c.width=c.height=size;const x=c.getContext('2d'),m=Math.min(im.width,im.height);x.drawImage(im,(im.width-m)/2,(im.height-m)/2,m,m,0,0,size,size);c.toBlob(b=>b?ok(b):no(new Error('Image error')),'image/jpeg',.85)};im.onerror=()=>no(new Error('Cannot read this image'));im.src=URL.createObjectURL(file)})}
@@ -126,9 +127,16 @@ async function loadTab(){
 function drawTable(){const T=TABS[tab],q=($('#sq')?.value||'').toLowerCase();let rows=cache.rows.filter(r=>JSON.stringify(Object.values(r)).toLowerCase().includes(q));
   const k=sortKey[tab];if(k)rows.sort((a,b)=>String(a[k.c]).localeCompare(String(b[k.c]),undefined,{numeric:true})*k.d);
   $('#pane').innerHTML=`<h2>${T.t} (${rows.length})</h2><div class="row"><input id="sq" placeholder="Search…" value="${esc(q)}" oninput="drawTable();this.focus()"><button class="g" style="flex:0" onclick="edit()">+ Add</button></div>
+  ${tab==='results'?(q?resultSummary(rows):'<p><small>Type a student name in Search to see all her results together with total marks and percentage.</small></p>'):''}
   <div class="wrap"><table><tr>${T.cols.map(c=>`<th onclick="srt('${c}')">${c==='photo_url'?'photo':c.replace('_',' ')}</th>`).join('')}<th></tr>
-  ${rows.map(r=>`<tr>${T.cols.map(c=>`<td>${c==='photo_url'?av(r[c],r.name,34):esc(r[c])}`).join('')}<td style="white-space:nowrap"><button class="s sm" onclick="edit('${r.id}')">Edit</button> <button class="r sm" onclick="del('${r.id}')">Delete</button>`).join('')}</table></div>`;
+  ${rows.map(r=>`<tr>${T.cols.map(c=>`<td>${c==='photo_url'?av(r[c],r.name,34):esc(r[c])}`).join('')}<td style="min-width:64px"><button class="s sm" onclick="edit('${r.id}')">Edit</button> <button class="r sm" onclick="del('${r.id}')">Delete</button>`).join('')}</table></div>`;
   const e=$('#sq');if(q){e.focus();e.setSelectionRange(q.length,q.length)}}
+function resultSummary(rows){
+  const by={};rows.forEach(r=>{const o=by[r.student]??={n:r.student_name||'?',ex:{}};(o.ex[r.exam]??=[]).push(r)});
+  return Object.values(by).map(o=>{let tm=0,tf=0;
+    const exams=Object.entries(o.ex).map(([e,list])=>{const m=list.reduce((a,x)=>a+x.marks,0),f=list.reduce((a,x)=>a+x.full_marks,0);tm+=m;tf+=f;
+      return `<div style="margin:12px 0"><b>${esc(e)}</b>: ${m}/${f} · <b>${pc(m,f)}%</b><div class="bar"><i style="width:${Math.min(100,pc(m,f))}%"></i></div><div class="wrap"><table><tr><th>Subject<th>Marks<th>%</tr>${list.map(x=>`<tr><td>${esc(x.subject)}<td>${x.marks}/${x.full_marks}<td>${pc(x.marks,x.full_marks)}%`).join('')}</table></div></div>`}).join('');
+    return `<div style="background:#f4faff;border:2px solid var(--sky);border-radius:14px;padding:12px;margin:12px 0"><h2>${esc(o.n)}</h2><div class="grid"><div class="stat" style="background:var(--green)">Total marks<span>${tm}/${tf}</span></div><div class="stat" style="background:var(--pink)">Percentage<span>${pc(tm,tf)}%</span></div></div>${exams}</div>`}).join('')}
 function srt(c){const k=sortKey[tab];sortKey[tab]={c,d:k&&k.c==c?-k.d:1};drawTable()}
 function modal(html){const m=document.createElement('div');m.className='modal';m.innerHTML=`<div class="box">${html}</div>`;m.onclick=e=>{if(e.target==m)m.remove()};document.body.appendChild(m);return m}
 function edit(id){const T=TABS[tab],r=cache.rows.find(x=>x.id==id)||{};
