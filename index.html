@@ -193,5 +193,6 @@ async function adminsPane(){const {data}=await db.from('profiles').select('*').e
   <h2>Add admin</h2><input id="na" placeholder="Admin name"><input id="ni" placeholder="Login ID" autocapitalize="none"><input id="np" placeholder="Password (min 6)"><button class="g" onclick="addAdmin()">Create admin</button>`}
 async function addAdmin(){try{await mkUser($('#ni').value,$('#np').value,'admin',$('#na').value);alert('Admin created');adminsPane()}catch(e){alert(e.message)}}
 boot();
-</script><script src="fees-tab.js"></script></body></html>
+</script><script src="fees-tab.js"></script><script src="two-bills.js"></script>
+</body></html>
 
