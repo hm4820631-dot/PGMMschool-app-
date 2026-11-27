@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Home | P.G.M.M</title>
+<style>
+body{font-family:system-ui,sans-serif;background:#eaf6ff;color:#14285a;max-width:560px;margin:auto;padding:16px}
+button,input{font:inherit;width:100%;box-sizing:border-box;padding:13px;margin-top:10px;border-radius:8px;border:1px solid #9cc9ea}
+button{background:#0b6fb8;color:#fff;border:0}
+.card{background:#fff;padding:14px;border-radius:10px;margin-top:12px}
+</style>
+</head>
+<body>
+<h2>Pransagar Girl's Model Mission (H.S)</h2>
+<div id="app"></div>
+<script>
+// Sample data only. Replace with Supabase queries after login rules are connected.
+const data = {
+  Student: [{id:'S001', name:'Sample Student', sections:{
+    'Student details':'Class IX, Roll 1', 'Guardian details':'Sample Guardian',
+    'Fees details':'Sample: paid', 'Result':'Sample: not published'}}],
+  Teacher: [{id:'T001', name:'Sample Teacher', sections:{
+    'Salary':'Sample: paid', 'Attendance':'Sample: present'}}]
+};
+const app = document.getElementById('app');
+function el(tag, text, click) {
+  const e = document.createElement(tag);
+  e.textContent = text;
+  if (click) e.onclick = click;
+  app.append(e);
+  return e;
+}
+function home() {
+  app.textContent = '';
+  el('h3','Home page');
+  for (const type in data) el('button', type, () => search(type));
+}
+function search(type) {
+  app.textContent = '';
+  el('button','Back',home);
+  el('h3',type);
+  const input = el('input','');
+  input.placeholder = type + ' ID or ' + type + ' name';
+  const find = () => {
+    const q = input.value.trim().toLowerCase();
+    const found = data[type].filter(p => p.id.toLowerCase() === q || (q && p.name.toLowerCase().includes(q)));
+    app.querySelectorAll('.result').forEach(x => x.remove());
+    if (!found.length) el('p','No match. Check the ID or name.').className = 'result';
+    found.forEach(p => el('button', p.id + ' - ' + p.name, () => profile(type,p)).className = 'result');
+  };
+  el('button','Search',find);
+}
+function profile(type, p) {
+  app.textContent = '';
+  el('button','Back',() => search(type));
+  el('h3', p.name + ' (' + p.id + ')');
+  for (const key in p.sections) el('button', key, () => {
+    app.querySelector('.card')?.remove();
+    el('div', key + ': ' + p.sections[key]).className = 'card';
+  });
+}
+home();
+</script>
+</body>
+</html>
